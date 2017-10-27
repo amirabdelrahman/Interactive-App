@@ -12,28 +12,6 @@ using System.Drawing;
 public class ImmersiveSimulation : MonoBehaviour {
 
 
-    [SerializeField]
-    private GameObject nodePrefab;
-    [SerializeField]
-    private GameObject nodeParent;
-
-    private Dictionary<string, CustomPrefab1> nodes = new Dictionary<string, CustomPrefab1>();
-
-    [SerializeField]
-    private GameObject controlPointsPrefab;
-    [SerializeField]
-    private GameObject controlPointParent;
-
-    [SerializeField]
-    private Material customShaderMaterial;
-
-    //private bool nodeCalculated=false;
-
-	
-
-
-    private Dictionary<string, CustomPrefab1> controlPoints = new Dictionary<string, CustomPrefab1>();
-
     public struct ShellNode
     {
 		public Vector3 p;
@@ -70,15 +48,8 @@ public class ImmersiveSimulation : MonoBehaviour {
     void Start()
     {
         setupModel();
-
-        flipMeshNormals(this.gameObject);
-
-       // createControlPoints();
-
-		//removeExtraControlPoints ();
-
+       // flipMeshNormals(this.gameObject);
         updateMesh();
-
     }
 
     bool dragging = false;
@@ -177,18 +148,6 @@ public class ImmersiveSimulation : MonoBehaviour {
                     startDragging(hit);
                 }
             }
-        }
-
-        if (ImmersiveSimulationManager.Instance.changed)
-        {
-            ImmersiveSimulationManager.Instance.changed=false;
-
-			updateSurrPoints ();
-
-            updateModel();
-
-            updateMesh();
-            
         }
 
         //take snapshot
@@ -300,157 +259,7 @@ public class ImmersiveSimulation : MonoBehaviour {
     }
     #endregion
     
-	
-    #region MeshFunctions
-    void flipMeshNormals(GameObject g)
-    {
-        MeshFilter filter = g.GetComponent(typeof(MeshFilter)) as MeshFilter;
-        if (filter != null)
-        {
-            Mesh mesh = filter.mesh;
 
-            Vector3[] normals = mesh.normals;
-            for (int i = 0; i < normals.Length; i++)
-                normals[i] = -normals[i];
-            mesh.normals = normals;
-
-            for (int m = 0; m < mesh.subMeshCount; m++)
-            {
-                int[] triangles = mesh.GetTriangles(m);
-                for (int i = 0; i < triangles.Length; i += 3)
-                {
-                    int temp = triangles[i + 0];
-                    triangles[i + 0] = triangles[i + 1];
-                    triangles[i + 1] = temp;
-                }
-                mesh.SetTriangles(triangles, m);
-            }
-        }
-    }
-
-    void changeVertixMeshColor()
-    {
-        Mesh mesh = GetComponent<MeshFilter>().mesh;
-        Vector3[] vertices = mesh.vertices;
-
-        // create new colors array where the colors will be created.
-        UnityEngine.Color[] colors = new UnityEngine.Color[vertices.Length];
-
-		for (int i = 0; i < vertices.Length; i++) {
-			colors [i] = UnityEngine.Color.Lerp (UnityEngine.Color.red, UnityEngine.Color.blue, vertices [i].y);
-		}
-        // assign the array of colors to the Mesh.
-        mesh.colors = colors;
-    }
-    ///////
-    #endregion
-
-    #region controlPoints
-    void createControlPoints()
-    {
-        int count = 0;
-        for (int j = 0; j < resolutionZ; ++j)
-        {
-            for (int i = 0; i < resolutionX; ++i)
-            {
-                Vector3 position = new Vector3(n[i, j].p.x, n[i, j].p.z, n[i, j].p.y);
-                Vector3 scale = new Vector3(0.05f, 0.05f, 0.05f);
-
-                string tag = "Control";
-                createPrefab(controlPoints, count, position, scale, tag, controlPointsPrefab, controlPointParent);
-                count++;
-            }
-        }
-    }
-	//remove the mesh collider from non draggable ones
-	void removeExtraControlPoints()
-	{
-		int count = 0;
-		for (int i = 0; i < resolutionX * resolutionZ; i++)
-		{
-			int iChanged = count / resolutionX;
-			int jChanged = count % resolutionX;
-
-			if ((iChanged) %4!=0||(jChanged) %4!=0) {
-
-				GameObject go = GameObject.Find ("Control" + count);
-				go.GetComponent<SphereCollider> ().enabled = false;
-				go.GetComponent<MeshRenderer> ().enabled = false;
-			}
-
-			count++;
-		}
-	}
-    void turnOffControlPoints()
-    {
-        int count = 0;
-        for (int i = 0; i < resolutionX * resolutionZ; i++)
-        {
-            GameObject go = GameObject.Find("Control" + count);
-            go.GetComponent<MeshRenderer>().enabled = false;
-            count++;
-        }
-    }
-
-    void turnOnControlPoints()
-    {
-        int count = 0;
-        for (int i = 0; i < resolutionX * resolutionZ; i++)
-        {
-            int iChanged = count / resolutionX;
-            int jChanged = count % resolutionX;
-
-            if (!((iChanged) % 4 != 0 || (jChanged) % 4 != 0))
-            {
-
-                GameObject go = GameObject.Find("Control" + count);
-                go.GetComponent<MeshRenderer>().enabled = true;
-            }
-            count++;
-        }
-    }
-
-    void updateSurrPoints()
-    {
-		GameObject go = GameObject.Find("Control" + ImmersiveSimulationManager.Instance.controlPointChanged);
-		Vector3 previousPosition = go.transform.position + new Vector3 (0.0f,ImmersiveSimulationManager.Instance.heightValueChanged,0.0f);
-		addDensity(previousPosition, -ImmersiveSimulationManager.Instance.heightValueChanged, 0.8f);
-    }
-
-    void addDensity(Vector3 hitPoint, float dy, float a)
-    {
-        int count = 0;
-        for (int i = 0; i < resolutionX * resolutionZ; i++)
-        {
-            int iChanged = count / resolutionX;
-            int jChanged = count % resolutionX;
-
-			GameObject go = GameObject.Find ("Control" + count);
-            
-			if (i != ImmersiveSimulationManager.Instance.controlPointChanged) {
-				
-				float distance = Vector3.Distance (hitPoint, go.transform.position);
-				float yDisplacement = dy * Mathf.Exp (-a * distance * distance);
-				go.transform.position = go.transform.position + new Vector3 (0, yDisplacement, 0);
-			} 
-
-			//ADD BOUNDS
-			//TODO: make them as variables
-			if (go.transform.position.y > 4.5f) {
-
-				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshDefautlElevation+maxDisplacement),go.transform.position.z);
-				
-			}else if(go.transform.position.y < 1.5f)
-			{
-				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshDefautlElevation-maxDisplacement),go.transform.position.z);
-			}
-			//////
-	
-            count++;
-        }
-    }
-
-    #endregion
 
     #region images
     private static string constructPath(string name)
