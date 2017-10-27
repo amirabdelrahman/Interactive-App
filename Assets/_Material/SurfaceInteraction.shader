@@ -43,7 +43,7 @@
 			
 
 			float y = IN.worldPos.y;
-			float dy = cos(_Contours*y*100.0);
+			float dy = cos(_Contours*y*200.0);
 
 			if (dy < -0.5) discard;
 
