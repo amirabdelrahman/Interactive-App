@@ -22,7 +22,7 @@ public class showMeshBounds : MonoBehaviour {
 	}
 
 	void CalcPositons(){
-		Bounds bounds = GetComponent<MeshFilter>().mesh.bounds;
+		Bounds bounds = GetComponent<MeshFilter>().sharedMesh.bounds;
 
 		//Bounds bounds;
 		//BoxCollider bc = GetComponent<BoxCollider>();

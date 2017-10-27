@@ -11,8 +11,6 @@ using System.Drawing;
 
 public class ImmersiveSimulation : MonoBehaviour {
 
-    //MESH DECLARATIONS
-   	private List<Vector3> quadVertices = new List<Vector3>();
 
     [SerializeField]
     private GameObject nodePrefab;
@@ -29,68 +27,44 @@ public class ImmersiveSimulation : MonoBehaviour {
     [SerializeField]
     private Material customShaderMaterial;
 
-    private bool nodeCalculated=false;
+    //private bool nodeCalculated=false;
 
-	private double meshHeight= 3.0;
-	private double maxDisplacement =1.5;
+	
 
 
     private Dictionary<string, CustomPrefab1> controlPoints = new Dictionary<string, CustomPrefab1>();
 
-    public class ShellNode
+    public struct ShellNode
     {
-        //public StatNode snode;
-		public Vector3 snode;
-        public double avgZ;                               //current spatial average
-        public double timeAvgZ = 0.0;                       //long exposure average
-        public double numSamples;
-        public double r, g, b;
-
-        public bool isSupported = false;                     // Initial support conditions  For shape Detection
-
-        //TensorSym stress = new TensorSym();
-        public double vonmises = 0.0;
-        public double quadCount = 0.0;
-        public bool isPartOfTheModel = true;
+		public Vector3 p;
+        public Vector3 p0;
     }
-
-    public class ModelParams
-    {
-        public double a, b, c, d1, d2;
-        public double maxd;
-        public double maxstress;
-    }
-
-    private List<double> vms = new List<double>();
-
-    private int srx = 41;
-    private int sry = 41;
+    
+    private int resolutionX = 41;
+    private int resolutionZ = 41;
 
     ShellNode[,] n;
+  
 
-    ShellNode[,] nds;
+    private float x0 = -2;
+    private float x1 = 2;
+    private float z0 = -2;
+    private float z1 = 2;
 
-    //StatShellQuad[,] q;
+    private float minElevation = -1.0f;
+    private float maxElevation = 1.0f;
 
-    private double x0 = -2;
-    private double x1 = 2;
-    private double y0 = -2;
-    private double y1 = 2;
+    private float meshDefautlElevation = 0.0f;
+    private float maxDisplacement = 1.5f;
 
-    private double t = 0.0;
+    private float t = 0.0f;
 
-    //private StatModel Statics;
+    Mesh srfMesh;
+    Vector3[] srfMeshPoints;
+    int[] srfMeshTriangles;
 
-    private double minn;
-    private double maxx;
-
-    Mesh vizmesh;
-    Vector3[] vizp; 
-    Vector2[] vizuv; // vm , thickness
-    Vector2[] vizuv2; //P1, P2
-    Vector2[] vizuv3; //Bm, Ux
-    Vector2[] vizuv4; //Uy, Uz
-    int[] viztri;
+    public GameObject InteractionPlane;
+    public GameObject DragCursor;
 
     // Use this for initialization
     void Start()
@@ -99,17 +73,112 @@ public class ImmersiveSimulation : MonoBehaviour {
 
         flipMeshNormals(this.gameObject);
 
-        createControlPoints();
+       // createControlPoints();
 
-		removeExtraControlPoints ();
+		//removeExtraControlPoints ();
 
-        renderMeshes();
+        updateMesh();
 
+    }
+
+    bool dragging = false;
+    Vector3 dragPointOrigin;
+    Vector3 dragPointCursor;
+
+    void startDragging(RaycastHit hit)
+    {
+        dragging = true;
+        InteractionPlane.transform.position = hit.point;
+        InteractionPlane.transform.right = Camera.main.transform.right;
+        InteractionPlane.transform.Rotate(Vector3.right, -90.0f);
+
+        dragPointOrigin = hit.point;
+        dragPointCursor = dragPointOrigin;
+
+        for (int j = 0; j < resolutionZ; ++j)
+        {
+            for (int i = 0; i < resolutionX; ++i)
+            {
+                n[i, j].p0 = n[i, j].p;
+            }
+        }
+    }
+
+
+    float clampY(float y)
+    {
+        if (y > maxElevation) return maxElevation;
+        if (y < minElevation) return minElevation;
+        return y;
+    }
+
+    void drag()
+    {
+        Collider ic = InteractionPlane.GetComponent<Collider>();
+        var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        if (ic.Raycast(ray, out hit, 2000.0f))
+        {
+           // dragPointCursor = hit.point;
+            dragPointCursor.y = clampY(hit.point.y);
+            DragCursor.transform.position = dragPointCursor;
+        }
+
+        float dy0 = dragPointCursor.y - dragPointOrigin.y; //displacement added at epicenter of interaction where cursor is
+        int k = 0;
+        for (int j = 0; j < resolutionZ; ++j)
+        {
+            for (int i = 0; i < resolutionX; ++i)
+            {
+                var dp = n[i, j].p0 - dragPointOrigin;
+                float d = Mathf.Exp(-0.5f*dp.sqrMagnitude)*dy0;
+
+
+                n[i, j].p.y = clampY(n[i, j].p0.y+d);
+
+                srfMeshPoints[k++] = n[i, j].p;
+            }
+        }
+
+        updateMesh();
+    }
+
+    void endDragging()
+    {
+        dragging = false;
+        GetComponent<MeshCollider>().sharedMesh = srfMesh;
+        InteractionPlane.transform.position = new Vector3(100000.0f, 1000000.0f, 1000000.0f);
     }
 
     // Update is called once per frame
     void Update()
 	{
+        if (dragging)
+        {
+            if (Input.GetMouseButtonUp(0))
+            {
+                endDragging();
+            }
+            else
+            {
+                drag();
+            }
+        }
+        else
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                MeshCollider mc = GetComponent<MeshCollider>();
+
+                var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                RaycastHit hit;
+                if (mc.Raycast(ray, out hit, 2000.0f))
+                {
+                    startDragging(hit);
+                }
+            }
+        }
+
         if (ImmersiveSimulationManager.Instance.changed)
         {
             ImmersiveSimulationManager.Instance.changed=false;
@@ -118,7 +187,7 @@ public class ImmersiveSimulation : MonoBehaviour {
 
             updateModel();
 
-            renderMeshes();
+            updateMesh();
             
         }
 
@@ -142,131 +211,92 @@ public class ImmersiveSimulation : MonoBehaviour {
     #region MeshSetup
     void setupModel()
     {
-        n = new ShellNode[srx, sry];
-        vizp = new Vector3[srx*sry];
-        vizuv = new Vector2[srx * sry];
-        vizuv2 = new Vector2[srx * sry];
-        vizuv3 = new Vector2[srx * sry];
-        vizuv4 = new Vector2[srx * sry];
-        viztri = new int[(srx - 1) * (sry - 1) * 6];
+        n = new ShellNode[resolutionX, resolutionZ];
+        srfMeshPoints = new Vector3[resolutionX*resolutionZ];
+        srfMeshTriangles = new int[(resolutionX - 1) * (resolutionZ - 1) * 6];
 
-        double dx = (x1 - x0) / (srx - 1.0);
-        double dy = (y1 - y0) / (sry - 1.0);
+        float dx = (x1 - x0) / (resolutionX - 1.0f);
+        float dy = (z1 - z0) / (resolutionZ - 1.0f);
 
-        for (int j = 0; j < sry; ++j)
+        for (int j = 0; j < resolutionZ; ++j)
         {
-            for (int i = 0; i < srx; ++i)
+            for (int i = 0; i < resolutionX; ++i)
             {
-                double x = x0 + i * dx;
-                double y = y0 + j * dy;
+                float x = x0 + i * dx;
+                float z = z0 + j * dy;
 
                 n[i, j] = new ShellNode();
-				n[i, j].snode = new Vector3((float)x, (float)y, (float)meshHeight);
-                n[i, j].avgZ = 0.0;
-                n[i, j].numSamples = 0.0;
+				n[i, j].p = new Vector3(x, meshDefautlElevation, z);
+                n[i, j].p0 = n[i, j].p;
 
-				vizp[j * srx + i] = new Vector3((float)x, (float)meshHeight, (float)y);
-
-				vizuv[j * srx + i] = new Vector2( map(3.0f,2.0f,4.0f,0.0f,1.0f), 0.0f);
+                srfMeshPoints[j * resolutionX + i] = n[i, j].p;
             }
         }
 			
         int k = 0;
-        for (int j = 0; j < sry - 1; ++j)
+        for (int j = 0; j < resolutionZ - 1; ++j)
         {
-            for (int i = 0; i < srx - 1; ++i)
+            for (int i = 0; i < resolutionX - 1; ++i)
             {
                 {
-                    int n0 = j * srx + i;
+                    int n0 = j * resolutionX + i;
 
-                    //DRAW THE MESHES
-                   	quadVertices.Add(new Vector3((float)n[i, j].snode.x, (float)n[i, j].snode.z, (float)n[i, j].snode.y));
-					quadVertices.Add(new Vector3((float)n[i + 1, j].snode.x, (float)n[i + 1, j].snode.z, (float)n[i + 1, j].snode.y));
-                  	quadVertices.Add(new Vector3((float)n[i + 1, j + 1].snode.x, (float)n[i + 1, j + 1].snode.z, (float)n[i + 1, j + 1].snode.y));
-                   	quadVertices.Add(new Vector3((float)n[i, j + 1].snode.x, (float)n[i, j + 1].snode.z, (float)n[i, j + 1].snode.y));
 
-                    viztri[k++] = n0;
-                    viztri[k++] = n0+1+srx;
-                    viztri[k++] = n0+1;
+                    srfMeshTriangles[k++] = n0;
+                    srfMeshTriangles[k++] = n0+1+resolutionX;
+                    srfMeshTriangles[k++] = n0+1;
 
-                    viztri[k++] = n0;
-                    viztri[k++] = n0  +srx;
-                    viztri[k++] = n0 + srx+1;
+                    srfMeshTriangles[k++] = n0;
+                    srfMeshTriangles[k++] = n0  +resolutionX;
+                    srfMeshTriangles[k++] = n0 + resolutionX+1;
                 }
             }
         }
 
         //mesh functions
-        vizmesh = new Mesh();
-        vizmesh.vertices = vizp;
-        vizmesh.triangles = viztri;
-        vizmesh.uv = vizuv;
-        vizmesh.uv2 = vizuv2;
-        vizmesh.uv3 = vizuv3;
-        vizmesh.uv4 = vizuv4;
+        srfMesh = new Mesh();
+        srfMesh.name = "interactiveMesh";
+        srfMesh.vertices = srfMeshPoints;
+        srfMesh.triangles = srfMeshTriangles;
         MeshFilter mf = GetComponent<MeshFilter>();
-        mf.mesh = vizmesh;
-        
+      //  mf.mesh = vizmesh;
+        mf.sharedMesh = srfMesh;
+
+        MeshCollider mc = GetComponent<MeshCollider>();
+        mc.sharedMesh = srfMesh;
     }
 
     void updateModel()
     {
         int count = 0;
-        for (int j = 0; j < sry; ++j)
+        for (int j = 0; j < resolutionZ; ++j)
         {
-            for (int i = 0; i < srx; ++i)
+            for (int i = 0; i < resolutionX; ++i)
             {
 				
 
                 GameObject go = GameObject.Find("Control" + count);
 
-				vizuv[count] = new Vector2( map(go.transform.position.y,2.0f,4.0f,0.0f,1.0f), 0.0f);
-
 				//
-				n [i, j].snode = new Vector3(go.transform.position.x,go.transform.position.z,go.transform.position.y);
+				n [i, j].p = new Vector3(go.transform.position.x,go.transform.position.z,go.transform.position.y);
 
-				vizp[count] = new Vector3((float)n[i,j].snode.x, (float)n[i, j].snode.z, (float)n[i, j].snode.y);
+				srfMeshPoints[count] = new Vector3((float)n[i,j].p.x, (float)n[i, j].p.z, (float)n[i, j].p.y);
                 count++;
             }
         }
 
-        count = 0;
-		int k = 0;
-        for (int j = 0; j < sry - 1; ++j)
-        {
-            for (int i = 0; i < srx - 1; ++i)
-            {
-                {
-                    //update Mesh vertices
-                   	quadVertices[count] = new Vector3((float)n[i, j].snode.x, (float)n[i, j].snode.z, (float)n[i, j].snode.y);
-                    count++;
-                    quadVertices[count] = (new Vector3((float)n[i + 1, j].snode.x, (float)n[i + 1, j].snode.z, (float)n[i + 1, j].snode.y));
-                    count++;
-                    quadVertices[count] = (new Vector3((float)n[i + 1, j + 1].snode.x, (float)n[i + 1, j + 1].snode.z, (float)n[i + 1, j + 1].snode.y));
-                    count++;
-                    quadVertices[count] = (new Vector3((float)n[i, j + 1].snode.x, (float)n[i, j + 1].snode.z, (float)n[i, j + 1].snode.y));
-                    count++;
 
-                }
-            }
-        }
 
     }
 
-    void renderMeshes()
+    void updateMesh()
     {
-        vizmesh.vertices = vizp;
-        vizmesh.uv = vizuv;
-        vizmesh.uv2 = vizuv3;
-        vizmesh.uv3 = vizuv3;
-        vizmesh.uv4 = vizuv4;
+        srfMesh.vertices = srfMeshPoints;
 
-        vizmesh.RecalculateNormals();
-        vizmesh.RecalculateBounds();
+        srfMesh.RecalculateNormals();
+        srfMesh.RecalculateBounds();
 
-        GetComponent<MeshFilter>().mesh = vizmesh;
-        Debug.Log("Mesh reassigned");
-
+        GetComponent<MeshFilter>().sharedMesh = srfMesh;
     }
     #endregion
     
@@ -319,11 +349,11 @@ public class ImmersiveSimulation : MonoBehaviour {
     void createControlPoints()
     {
         int count = 0;
-        for (int j = 0; j < sry; ++j)
+        for (int j = 0; j < resolutionZ; ++j)
         {
-            for (int i = 0; i < srx; ++i)
+            for (int i = 0; i < resolutionX; ++i)
             {
-                Vector3 position = new Vector3(n[i, j].snode.x, n[i, j].snode.z, n[i, j].snode.y);
+                Vector3 position = new Vector3(n[i, j].p.x, n[i, j].p.z, n[i, j].p.y);
                 Vector3 scale = new Vector3(0.05f, 0.05f, 0.05f);
 
                 string tag = "Control";
@@ -336,10 +366,10 @@ public class ImmersiveSimulation : MonoBehaviour {
 	void removeExtraControlPoints()
 	{
 		int count = 0;
-		for (int i = 0; i < srx * sry; i++)
+		for (int i = 0; i < resolutionX * resolutionZ; i++)
 		{
-			int iChanged = count / srx;
-			int jChanged = count % srx;
+			int iChanged = count / resolutionX;
+			int jChanged = count % resolutionX;
 
 			if ((iChanged) %4!=0||(jChanged) %4!=0) {
 
@@ -354,7 +384,7 @@ public class ImmersiveSimulation : MonoBehaviour {
     void turnOffControlPoints()
     {
         int count = 0;
-        for (int i = 0; i < srx * sry; i++)
+        for (int i = 0; i < resolutionX * resolutionZ; i++)
         {
             GameObject go = GameObject.Find("Control" + count);
             go.GetComponent<MeshRenderer>().enabled = false;
@@ -365,10 +395,10 @@ public class ImmersiveSimulation : MonoBehaviour {
     void turnOnControlPoints()
     {
         int count = 0;
-        for (int i = 0; i < srx * sry; i++)
+        for (int i = 0; i < resolutionX * resolutionZ; i++)
         {
-            int iChanged = count / srx;
-            int jChanged = count % srx;
+            int iChanged = count / resolutionX;
+            int jChanged = count % resolutionX;
 
             if (!((iChanged) % 4 != 0 || (jChanged) % 4 != 0))
             {
@@ -390,10 +420,10 @@ public class ImmersiveSimulation : MonoBehaviour {
     void addDensity(Vector3 hitPoint, float dy, float a)
     {
         int count = 0;
-        for (int i = 0; i < srx * sry; i++)
+        for (int i = 0; i < resolutionX * resolutionZ; i++)
         {
-            int iChanged = count / srx;
-            int jChanged = count % srx;
+            int iChanged = count / resolutionX;
+            int jChanged = count % resolutionX;
 
 			GameObject go = GameObject.Find ("Control" + count);
             
@@ -408,11 +438,11 @@ public class ImmersiveSimulation : MonoBehaviour {
 			//TODO: make them as variables
 			if (go.transform.position.y > 4.5f) {
 
-				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshHeight+maxDisplacement),go.transform.position.z);
+				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshDefautlElevation+maxDisplacement),go.transform.position.z);
 				
 			}else if(go.transform.position.y < 1.5f)
 			{
-				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshHeight-maxDisplacement),go.transform.position.z);
+				go.transform.position = new Vector3 (go.transform.position.x,(float)(meshDefautlElevation-maxDisplacement),go.transform.position.z);
 			}
 			//////
 	
@@ -479,7 +509,7 @@ public class ImmersiveSimulation : MonoBehaviour {
 
         ///////////get image from the other folder/////////////
         //System.Drawing.Image output = System.Drawing.Image.FromFile("Z:\\pix2pix-tensorflow\\c_test\\images\\" + name + "-outputs.png");
-        Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
+       // Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
     }
 
     void loadandSaveNewImage()
