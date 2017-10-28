@@ -3,92 +3,61 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 using System.IO;
-//using System.Drawing;
+using System.Drawing;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 [AddComponentMenu("Mesh/Dynamic Mesh Generator")]
 
-public class OutputMeshGeneration : MonoBehaviour {
+public class OutputMeshGeneration : MonoBehaviour
+{
 
-    //MESH DECLARATIONS
-    private List<Vector3> quadVertices = new List<Vector3>();
-    private List<Vector3> quadVerticesUo = new List<Vector3>();
-    private List<Vector3> quadVerticesDown = new List<Vector3>();
-
-    [SerializeField]
-    private Material customShaderMaterial;
-    
-
-    private double meshHeight = 3.0;
-    private double maxDisplacement = 1.5;
-    
-
-    public class ShellNode
+    public struct ShellNode
     {
-        //public StatNode snode;
-        public Vector3 snode;
-        public double r, g, b;
-        
-        
+        public Vector3 p;
+        public Vector3 p0;
     }
 
-
-    private List<double> vms = new List<double>();
-
-    private int srx = 16;
-    private int sry = 16;
+    private int resolutionX = 41;
+    private int resolutionZ = 41;
 
     ShellNode[,] n;
-    ShellNode[,] nUp;
-    ShellNode[,] nDown;
 
-    ShellNode[,] nds;
 
-    //StatShellQuad[,] q;
+    private float x0 = 4;
+    private float x1 = 8;
+    private float z0 = -2;
+    private float z1 = 2;
 
-    private double x0 = -2;
-    private double x1 = 2;
-    private double y0 = -2;
-    private double y1 = 2;
+    [SerializeField]
+    private float elevation = 0.0f;
 
-    private double t = 0.0;
+    [SerializeField]
+    private int MeshNum = 0;
 
-    //private StatModel Statics;
+    private float t = 0.0f;
 
-    private double minn;
-    private double maxx;
-
-    Mesh vizmesh;
-    Vector3[] vizp;
-    Vector2[] vizuv; // vm , thickness
-    Vector2[] vizuv2; //P1, P2
-    Vector2[] vizuv3; //Bm, Ux
-    Vector2[] vizuv4; //Uy, Uz
-    int[] viztri;
+    Mesh srfMesh;
+    Vector3[] srfMeshPoints;
+    int[] srfMeshTriangles;
+    
 
     // Use this for initialization
     void Start()
     {
-
+        /*setupModel();
+        // flipMeshNormals(this.gameObject);
+        updateMesh();*/
     }
+    
 
     // Update is called once per frame
     void Update()
     {
-        
-
         //take snapshot
         if (Input.GetKeyDown("o"))
         {
-            //Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
-            //outputBitmap.SetPixel(i + rx, j, outputBitmap.GetPixel(i, j));
-
-            setupModel();
-
-            flipMeshNormals(this.gameObject);
-
-            renderMeshes();
+            loadandSaveNewImage();
 
         }
 
@@ -97,145 +66,162 @@ public class OutputMeshGeneration : MonoBehaviour {
     #region MeshSetup
     void setupModel()
     {
-        n = new ShellNode[srx, sry];
-        vizp = new Vector3[srx * sry];
-        vizuv = new Vector2[srx * sry];
-        vizuv2 = new Vector2[srx * sry];
-        vizuv3 = new Vector2[srx * sry];
-        vizuv4 = new Vector2[srx * sry];
-        viztri = new int[(srx - 1) * (sry - 1) * 6];
+        n = new ShellNode[resolutionX, resolutionZ];
 
-        double dx = (x1 - x0) / (srx - 1.0);
-        double dy = (y1 - y0) / (sry - 1.0);
+        srfMeshPoints = new Vector3[resolutionX * resolutionZ];
+        srfMeshTriangles = new int[(resolutionX - 1) * (resolutionZ - 1) * 6];
+        
 
-        for (int j = 0; j < sry; ++j)
+        float dx = (x1 - x0) / (resolutionX - 1.0f);
+        float dy = (z1 - z0) / (resolutionZ - 1.0f);
+
+        for (int j = 0; j < resolutionZ; ++j)
         {
-            for (int i = 0; i < srx; ++i)
+            for (int i = 0; i < resolutionX; ++i)
             {
-                double x = x0 + i * dx;
-                double y = y0 + j * dy;
+                float x = x0 + i * dx;
+                float z = z0 + j * dy;
 
                 n[i, j] = new ShellNode();
-                n[i, j].snode = new Vector3((float)x, (float)y, (float)meshHeight);
+                n[i, j].p = new Vector3(x, elevation, z);
+                n[i, j].p0 = n[i, j].p;
 
-                vizp[j * srx + i] = new Vector3((float)x, (float)meshHeight, (float)y);
-
-                vizuv[j * srx + i] = new Vector2(map(3.0f, 2.0f, 4.0f, 0.0f, 1.0f), 0.0f);
+                srfMeshPoints[j * resolutionX + i] = n[i, j].p;
+                
             }
         }
 
         int k = 0;
-        for (int j = 0; j < sry - 1; ++j)
+        for (int j = 0; j < resolutionZ - 1; ++j)
         {
-            for (int i = 0; i < srx - 1; ++i)
+            for (int i = 0; i < resolutionX - 1; ++i)
             {
                 {
-                    int n0 = j * srx + i;
+                    int n0 = j * resolutionX + i;
 
-                    //DRAW THE MESHES
-                    quadVertices.Add(new Vector3((float)n[i, j].snode.x, (float)n[i, j].snode.z, (float)n[i, j].snode.y));
-                    quadVertices.Add(new Vector3((float)n[i + 1, j].snode.x, (float)n[i + 1, j].snode.z, (float)n[i + 1, j].snode.y));
-                    quadVertices.Add(new Vector3((float)n[i + 1, j + 1].snode.x, (float)n[i + 1, j + 1].snode.z, (float)n[i + 1, j + 1].snode.y));
-                    quadVertices.Add(new Vector3((float)n[i, j + 1].snode.x, (float)n[i, j + 1].snode.z, (float)n[i, j + 1].snode.y));
 
-                    viztri[k++] = n0;
-                    viztri[k++] = n0 + 1 + srx;
-                    viztri[k++] = n0 + 1;
+                    srfMeshTriangles[k++] = n0;
+                    srfMeshTriangles[k++] = n0 + 1 + resolutionX;
+                    srfMeshTriangles[k++] = n0 + 1;
 
-                    viztri[k++] = n0;
-                    viztri[k++] = n0 + srx;
-                    viztri[k++] = n0 + srx + 1;
+                    srfMeshTriangles[k++] = n0;
+                    srfMeshTriangles[k++] = n0 + resolutionX;
+                    srfMeshTriangles[k++] = n0 + resolutionX + 1;
                 }
             }
         }
 
         //mesh functions
-        vizmesh = new Mesh();
-        vizmesh.vertices = vizp;
-        vizmesh.triangles = viztri;
-        vizmesh.uv = vizuv;
-        vizmesh.uv2 = vizuv2;
-        vizmesh.uv3 = vizuv3;
-        vizmesh.uv4 = vizuv4;
+        srfMesh = new Mesh();
+        srfMesh.name = "interactiveMesh";
+        srfMesh.vertices = srfMeshPoints;
+        srfMesh.triangles = srfMeshTriangles;
         MeshFilter mf = GetComponent<MeshFilter>();
-        mf.mesh = vizmesh;
-
+        //  mf.mesh = vizmesh;
+        mf.sharedMesh = srfMesh;
+        
     }
     
-    void renderMeshes()
+
+    void updateMesh()
     {
-        vizmesh.vertices = vizp;
-        vizmesh.uv = vizuv;
-        vizmesh.uv2 = vizuv3;
-        vizmesh.uv3 = vizuv3;
-        vizmesh.uv4 = vizuv4;
+        srfMesh.vertices = srfMeshPoints;
 
-        vizmesh.RecalculateNormals();
-        vizmesh.RecalculateBounds();
+        srfMesh.RecalculateNormals();
+        srfMesh.RecalculateBounds();
 
-        GetComponent<MeshFilter>().mesh = vizmesh;
-        Debug.Log("Mesh reassigned");
+        GetComponent<MeshFilter>().sharedMesh = srfMesh;
     }
     #endregion
 
-
-    #region MeshFunctions
-    void flipMeshNormals(GameObject g)
+    #region images
+    private static string constructPath(string folder, string name)
     {
-        MeshFilter filter = g.GetComponent(typeof(MeshFilter)) as MeshFilter;
-        if (filter != null)
+        return string.Format("{0}/{2}/{1}",
+                             Application.dataPath, name,folder);
+    }
+    
+
+    void loadandSaveNewImage()
+    {
+        Bitmap outputBitmap = new Bitmap(constructPath("tensorflow", "output.png"));
+        int rx = 256;
+        int ry = 256;
+        Bitmap bmp = new Bitmap(rx, ry);
+        Renderer rend = this.GetComponent<Renderer>();
+        Texture2D cutoutTexture;
+
+        //if top
+        if (MeshNum == 0)
         {
-            Mesh mesh = filter.mesh;
-
-            Vector3[] normals = mesh.normals;
-            for (int i = 0; i < normals.Length; i++)
-                normals[i] = -normals[i];
-            mesh.normals = normals;
-
-            for (int m = 0; m < mesh.subMeshCount; m++)
+            for (int i = 0; i < rx; i++)
             {
-                int[] triangles = mesh.GetTriangles(m);
-                for (int i = 0; i < triangles.Length; i += 3)
+                for (int j = 0; j < ry; j++)
                 {
-                    int temp = triangles[i + 0];
-                    triangles[i + 0] = triangles[i + 1];
-                    triangles[i + 1] = temp;
+                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R));
                 }
-                mesh.SetTriangles(triangles, m);
             }
+            bmp.Save(constructPath("Resources","outputUp.png"), System.Drawing.Imaging.ImageFormat.Png);
+            /*string url = "file"+ constructPath("Resources", "outputUp.png");
+            WWW www = new WWW(url);
+            yield return www;
+            Renderer renderer = GetComponent<Renderer>();
+            renderer.material.mainTexture = www.texture;*/
+
+            cutoutTexture = LoadTexture(constructPath("Resources", "outputUp.png"), rx, ry);
+            cutoutTexture.alphaIsTransparency = true;
+            rend.material.mainTexture = cutoutTexture;
+            Debug.Log("loaded Texture up");
         }
-    }
-
-    void changeVertixMeshColor()
-    {
-        Mesh mesh = GetComponent<MeshFilter>().mesh;
-        Vector3[] vertices = mesh.vertices;
-
-        // create new colors array where the colors will be created.
-        UnityEngine.Color[] colors = new UnityEngine.Color[vertices.Length];
-
-        for (int i = 0; i < vertices.Length; i++)
+        //IF BOTTOM LAYER
+        else if (MeshNum == 2)
         {
-            colors[i] = UnityEngine.Color.Lerp(UnityEngine.Color.red, UnityEngine.Color.blue, vertices[i].y);
+            for (int i = 0; i < rx; i++)
+            {
+                for (int j = 0; j < ry; j++)
+                {
+                    //TODO:REVERSE
+                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(255- outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R));
+                }
+            }
+            bmp.Save(constructPath("Resources", "outputDown.png"), System.Drawing.Imaging.ImageFormat.Png);
+
+            cutoutTexture = LoadTexture(constructPath("Resources", "outputDown.png"), rx, ry);
+            cutoutTexture.alphaIsTransparency = true;
+            rend.material.mainTexture = cutoutTexture;
+            Debug.Log("loaded Texture down");
         }
-        // assign the array of colors to the Mesh.
-        mesh.colors = colors;
+        
     }
-    ///////
+
     #endregion
 
     #region Utilities
-
+    
     float map(float s, float a1, float a2, float b1, float b2)
     {
         return b1 + (s - a1) * (b2 - b1) / (a2 - a1);
     }
 
-    private static string constructPath(string name)
+    public Texture2D LoadTexture(string filePath, int width, int height)
     {
-        return string.Format("{0}/tensorflow/{1}",
-                             Application.dataPath, name);
+
+        Texture2D tex = null;
+
+        try
+        {
+            var bytes = File.ReadAllBytes(filePath);
+            tex = new Texture2D(width, height);
+            tex.LoadImage(bytes); //..this will auto-resize the texture dimensions.
+
+        }
+        catch (Exception e)
+        {
+            UnityEngine.Debug.Log(e.ToString());
+        }
+        return tex;
     }
+
 
     #endregion
 

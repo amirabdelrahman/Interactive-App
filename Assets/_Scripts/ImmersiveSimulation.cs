@@ -232,7 +232,6 @@ public class ImmersiveSimulation : MonoBehaviour {
         {
             for (int i = 0; i < resolutionX; ++i)
             {
-				
 
                 GameObject go = GameObject.Find("Control" + count);
 
@@ -243,9 +242,6 @@ public class ImmersiveSimulation : MonoBehaviour {
                 count++;
             }
         }
-
-
-
     }
 
     void updateMesh()
@@ -258,8 +254,6 @@ public class ImmersiveSimulation : MonoBehaviour {
         GetComponent<MeshFilter>().sharedMesh = srfMesh;
     }
     #endregion
-    
-
 
     #region images
     private static string constructPath(string name)
@@ -323,7 +317,7 @@ public class ImmersiveSimulation : MonoBehaviour {
 
     void loadandSaveNewImage()
     {
-        Bitmap outputBitmap = new Bitmap(constructPath("trial.png"));
+        Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
 
         int rx = 256;
         int ry = 256;
