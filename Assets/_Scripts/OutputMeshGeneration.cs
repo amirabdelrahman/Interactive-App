@@ -51,7 +51,7 @@ public class OutputMeshGeneration : MonoBehaviour
         //take snapshot
         if (Input.GetKeyDown("o"))
         {
-            loadandSaveNewImage();
+            LoadandSaveNewImage();
 
         }
 
@@ -66,7 +66,7 @@ public class OutputMeshGeneration : MonoBehaviour
     }
     
 
-    void loadandSaveNewImage()
+    public void LoadandSaveNewImage()
     {
         Debug.Log(constructPath("output.png"));
         Bitmap outputBitmap = new Bitmap(constructPath( "output.png"));

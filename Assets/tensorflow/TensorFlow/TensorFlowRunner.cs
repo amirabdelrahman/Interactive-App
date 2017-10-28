@@ -8,6 +8,8 @@ using System.Drawing;
 
 public class TensorFlowRunner : MonoBehaviour
 {
+
+
     public string pix2PixLoc;
     private TensorFlowJob tensorFlowJob;
 
@@ -17,9 +19,11 @@ public class TensorFlowRunner : MonoBehaviour
     private static string modelPath;
     private string inputFilePath;
 
+    private OutputMeshGeneration[] meshGenerators;
+
     void Start()
     {
-
+        meshGenerators = FindObjectsOfType(typeof(OutputMeshGeneration)) as OutputMeshGeneration[];
         modelPath = Path.Combine(pix2PixLoc, "models");
         inputFilePath = Path.Combine(modelPath, "input.png");
     }
@@ -54,7 +58,11 @@ public class TensorFlowRunner : MonoBehaviour
                 //We can use events and delegates to do it more neatly if we need more sophistitcaed functionality. 
                 //InputSurface material.mainTexture = tensorFlowJob.targetMaterialDist;
 
-
+                for (int i = 0; i < meshGenerators.Length; i++)
+                {
+                    meshGenerators[i].LoadandSaveNewImage();
+                }
+                
                 tensorFlowJob = null;
             }
         }
@@ -70,6 +78,8 @@ public class TensorFlowRunner : MonoBehaviour
 
     [SerializeField]
     private Camera captureCamera;
+
+
     void takeImageScreenShot()
     {
         if (takeHiResShot)
