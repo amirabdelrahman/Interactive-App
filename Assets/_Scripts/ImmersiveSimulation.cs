@@ -284,10 +284,25 @@ public class ImmersiveSimulation : MonoBehaviour {
             RenderTexture.active = null; // added to avoid errors
             Destroy(rt);
             byte[] bytes = screenShot.EncodeToPNG();
-            string filename = constructPath("trial.png");
+            string filename = constructPath("inputBefore.png");
             System.IO.File.WriteAllBytes(filename, bytes);
             Debug.Log(string.Format("Took screenshot to: {0}", filename));
             takeHiResShot = true;
+            Bitmap outputBitmap = new Bitmap(constructPath("inputBefore.png"));
+            int rx = 256;
+            int ry = 256;
+            Bitmap bmp = new Bitmap(rx, ry);
+            Renderer rend = this.GetComponent<Renderer>();
+            Texture2D cutoutTexture;
+
+            for (int i = 0; i < rx; i++)
+            {
+                for (int j = 0; j < ry; j++)
+                {
+                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(127, 127, outputBitmap.GetPixel(i, j).R));
+                }
+            }
+            bmp.Save(constructPath("input.png"), System.Drawing.Imaging.ImageFormat.Png);
         }
 
     }

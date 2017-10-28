@@ -5,9 +5,6 @@ using System;
 using System.IO;
 using System.Drawing;
 
-[RequireComponent(typeof(MeshFilter))]
-[RequireComponent(typeof(MeshRenderer))]
-[AddComponentMenu("Mesh/Dynamic Mesh Generator")]
 
 public class OutputMeshGeneration : MonoBehaviour
 {
@@ -45,9 +42,6 @@ public class OutputMeshGeneration : MonoBehaviour
     // Use this for initialization
     void Start()
     {
-        /*setupModel();
-        // flipMeshNormals(this.gameObject);
-        updateMesh();*/
     }
     
 
@@ -63,88 +57,20 @@ public class OutputMeshGeneration : MonoBehaviour
 
     }
 
-    #region MeshSetup
-    void setupModel()
-    {
-        n = new ShellNode[resolutionX, resolutionZ];
-
-        srfMeshPoints = new Vector3[resolutionX * resolutionZ];
-        srfMeshTriangles = new int[(resolutionX - 1) * (resolutionZ - 1) * 6];
-        
-
-        float dx = (x1 - x0) / (resolutionX - 1.0f);
-        float dy = (z1 - z0) / (resolutionZ - 1.0f);
-
-        for (int j = 0; j < resolutionZ; ++j)
-        {
-            for (int i = 0; i < resolutionX; ++i)
-            {
-                float x = x0 + i * dx;
-                float z = z0 + j * dy;
-
-                n[i, j] = new ShellNode();
-                n[i, j].p = new Vector3(x, elevation, z);
-                n[i, j].p0 = n[i, j].p;
-
-                srfMeshPoints[j * resolutionX + i] = n[i, j].p;
-                
-            }
-        }
-
-        int k = 0;
-        for (int j = 0; j < resolutionZ - 1; ++j)
-        {
-            for (int i = 0; i < resolutionX - 1; ++i)
-            {
-                {
-                    int n0 = j * resolutionX + i;
-
-
-                    srfMeshTriangles[k++] = n0;
-                    srfMeshTriangles[k++] = n0 + 1 + resolutionX;
-                    srfMeshTriangles[k++] = n0 + 1;
-
-                    srfMeshTriangles[k++] = n0;
-                    srfMeshTriangles[k++] = n0 + resolutionX;
-                    srfMeshTriangles[k++] = n0 + resolutionX + 1;
-                }
-            }
-        }
-
-        //mesh functions
-        srfMesh = new Mesh();
-        srfMesh.name = "interactiveMesh";
-        srfMesh.vertices = srfMeshPoints;
-        srfMesh.triangles = srfMeshTriangles;
-        MeshFilter mf = GetComponent<MeshFilter>();
-        //  mf.mesh = vizmesh;
-        mf.sharedMesh = srfMesh;
-        
-    }
-    
-
-    void updateMesh()
-    {
-        srfMesh.vertices = srfMeshPoints;
-
-        srfMesh.RecalculateNormals();
-        srfMesh.RecalculateBounds();
-
-        GetComponent<MeshFilter>().sharedMesh = srfMesh;
-    }
-    #endregion
-
+   
     #region images
-    private static string constructPath(string folder, string name)
+    private static string constructPath( string name)
     {
-        return string.Format("{0}/{2}/{1}",
-                             Application.dataPath, name,folder);
+        return string.Format("{0}\\{1}",
+                             "C:\\pix2pix-tensorflow\\models", name);
     }
     
 
     void loadandSaveNewImage()
     {
-        Bitmap outputBitmap = new Bitmap(constructPath("tensorflow", "output.png"));
+        Debug.Log(constructPath("output.png"));
+        Bitmap outputBitmap = new Bitmap(constructPath( "output.png"));
+        
         int rx = 256;
         int ry = 256;
         Bitmap bmp = new Bitmap(rx, ry);
@@ -158,17 +84,11 @@ public class OutputMeshGeneration : MonoBehaviour
             {
                 for (int j = 0; j < ry; j++)
                 {
-                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R, outputBitmap.GetPixel(i, j).R));
+                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(outputBitmap.GetPixel(i, j).R, 125, 55, 66));
                 }
             }
-            bmp.Save(constructPath("Resources","outputUp.png"), System.Drawing.Imaging.ImageFormat.Png);
-            /*string url = "file"+ constructPath("Resources", "outputUp.png");
-            WWW www = new WWW(url);
-            yield return www;
-            Renderer renderer = GetComponent<Renderer>();
-            renderer.material.mainTexture = www.texture;*/
-
-            cutoutTexture = LoadTexture(constructPath("Resources", "outputUp.png"), rx, ry);
+            bmp.Save(constructPath("outputUp.png"), System.Drawing.Imaging.ImageFormat.Png);
+            cutoutTexture = LoadTexture(constructPath("outputUp.png"), rx, ry);
             cutoutTexture.alphaIsTransparency = true;
             rend.material.mainTexture = cutoutTexture;
             Debug.Log("loaded Texture up");
@@ -180,13 +100,12 @@ public class OutputMeshGeneration : MonoBehaviour
             {
                 for (int j = 0; j < ry; j++)
                 {
-                    //TODO:REVERSE
                     bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(255- outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R, 255 - outputBitmap.GetPixel(i, j).R));
                 }
             }
-            bmp.Save(constructPath("Resources", "outputDown.png"), System.Drawing.Imaging.ImageFormat.Png);
+            bmp.Save(constructPath( "outputDown.png"), System.Drawing.Imaging.ImageFormat.Png);
 
-            cutoutTexture = LoadTexture(constructPath("Resources", "outputDown.png"), rx, ry);
+            cutoutTexture = LoadTexture(constructPath( "outputDown.png"), rx, ry);
             cutoutTexture.alphaIsTransparency = true;
             rend.material.mainTexture = cutoutTexture;
             Debug.Log("loaded Texture down");
@@ -222,7 +141,128 @@ public class OutputMeshGeneration : MonoBehaviour
         return tex;
     }
 
+    //blur
+    private float avgR = 0;
+    private float avgG = 0;
+    private float avgB = 0;
+    private float avgA = 0;
+    private float blurPixelCount = 0;
+    
+    Texture2D FastBlur(Texture2D image, int radius, int iterations)
+    {
+        Texture2D tex = image;
 
+        for (var i = 0; i < iterations; i++)
+        {
+
+            tex = BlurImage(tex, radius, true);
+            tex = BlurImage(tex, radius, false);
+
+        }
+
+        return tex;
+    }
+
+
+
+    Texture2D BlurImage(Texture2D image, int blurSize, bool horizontal)
+    {
+
+        Texture2D blurred = new Texture2D(image.width, image.height);
+        int _W = image.width;
+        int _H = image.height;
+        int xx, yy, x, y;
+
+        if (horizontal)
+        {
+            for (yy = 0; yy < _H; yy++)
+            {
+                for (xx = 0; xx < _W; xx++)
+                {
+                    ResetPixel();
+
+                    //Right side of pixel
+
+                    for (x = xx; (x < xx + blurSize && x < _W); x++)
+                    {
+                        AddPixel(image.GetPixel(x, yy));
+                    }
+
+                    //Left side of pixel
+
+                    for (x = xx; (x > xx - blurSize && x > 0); x--)
+                    {
+                        AddPixel(image.GetPixel(x, yy));
+
+                    }
+
+
+                    CalcPixel();
+
+                    for (x = xx; x < xx + blurSize && x < _W; x++)
+                    {
+                        blurred.SetPixel(x, yy, new UnityEngine.Color(avgR, avgG, avgB, 1.0f));
+
+                    }
+                }
+            }
+        }
+
+        else
+        {
+            for (xx = 0; xx < _W; xx++)
+            {
+                for (yy = 0; yy < _H; yy++)
+                {
+                    ResetPixel();
+
+                    //Over pixel
+
+                    for (y = yy; (y < yy + blurSize && y < _H); y++)
+                    {
+                        AddPixel(image.GetPixel(xx, y));
+                    }
+                    //Under pixel
+
+                    for (y = yy; (y > yy - blurSize && y > 0); y--)
+                    {
+                        AddPixel(image.GetPixel(xx, y));
+                    }
+                    CalcPixel();
+                    for (y = yy; y < yy + blurSize && y < _H; y++)
+                    {
+                        blurred.SetPixel(xx, y, new UnityEngine.Color(avgR, avgG, avgB, 1.0f));
+
+                    }
+                }
+            }
+        }
+
+        blurred.Apply();
+        return blurred;
+    }
+    void AddPixel(UnityEngine.Color pixel)
+    {
+        avgR += pixel.r;
+        avgG += pixel.g;
+        avgB += pixel.b;
+        blurPixelCount++;
+    }
+
+    void ResetPixel()
+    {
+        avgR = 0.0f;
+        avgG = 0.0f;
+        avgB = 0.0f;
+        blurPixelCount = 0;
+    }
+
+    void CalcPixel()
+    {
+        avgR = avgR / blurPixelCount;
+        avgG = avgG / blurPixelCount;
+        avgB = avgB / blurPixelCount;
+    }
     #endregion
 
 }
