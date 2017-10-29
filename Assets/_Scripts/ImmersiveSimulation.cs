@@ -44,12 +44,34 @@ public class ImmersiveSimulation : MonoBehaviour {
     public GameObject InteractionPlane;
     public GameObject DragCursor;
 
+    public GameObject TopLayer;
+    public GameObject MidLayer;
+    public GameObject BottomLayer;
+
+    Texture2D layersTexture;
+
+    void LoadOutputImageForLayers(string path)
+    {
+        if (System.IO.File.Exists(path))
+        {
+            var bytes = System.IO.File.ReadAllBytes(path);
+            layersTexture.LoadImage(bytes);
+
+            TopLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
+            MidLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
+            BottomLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
+        }
+    }
     // Use this for initialization
     void Start()
     {
+         layersTexture = new Texture2D(2, 2);
+        DragCursor.SetActive(false);
         setupModel();
        // flipMeshNormals(this.gameObject);
         updateMesh();
+
+        LoadOutputImageForLayers(@"C:\GIT\acadiaInteractive\app\Assets\Resources\output.png");
     }
 
     bool dragging = false;
@@ -58,6 +80,7 @@ public class ImmersiveSimulation : MonoBehaviour {
 
     void startDragging(RaycastHit hit)
     {
+        DragCursor.SetActive(true);
         dragging = true;
         InteractionPlane.transform.position = hit.point;
         InteractionPlane.transform.right = Camera.main.transform.right;
@@ -116,6 +139,7 @@ public class ImmersiveSimulation : MonoBehaviour {
 
     void endDragging()
     {
+        DragCursor.SetActive(false);
         dragging = false;
         GetComponent<MeshCollider>().sharedMesh = srfMesh;
         InteractionPlane.transform.position = new Vector3(100000.0f, 1000000.0f, 1000000.0f);
