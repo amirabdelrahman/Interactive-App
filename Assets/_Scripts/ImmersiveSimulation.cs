@@ -9,20 +9,21 @@ using System.Drawing;
 [RequireComponent(typeof(MeshRenderer))]
 [AddComponentMenu("Mesh/Dynamic Mesh Generator")]
 
-public class ImmersiveSimulation : MonoBehaviour {
+public class ImmersiveSimulation : MonoBehaviour
+{
 
 
     public struct ShellNode
     {
-		public Vector3 p;
+        public Vector3 p;
         public Vector3 p0;
     }
-    
+
     private int resolutionX = 41;
     private int resolutionZ = 41;
 
     ShellNode[,] n;
-  
+
 
     private float x0 = -2;
     private float x1 = 2;
@@ -48,6 +49,8 @@ public class ImmersiveSimulation : MonoBehaviour {
     public GameObject MidLayer;
     public GameObject BottomLayer;
 
+    public RenderTexture topViewTexture;
+
     Texture2D layersTexture;
 
     void LoadOutputImageForLayers(string path)
@@ -57,26 +60,50 @@ public class ImmersiveSimulation : MonoBehaviour {
             var bytes = System.IO.File.ReadAllBytes(path);
             layersTexture.LoadImage(bytes);
 
+            layersTexture = ScaleTexture(layersTexture, 32, 32);
+
             TopLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
-            MidLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
+            //MidLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
             BottomLayer.GetComponent<MeshRenderer>().material.mainTexture = layersTexture;
         }
+    }
+    private Texture2D ScaleTexture(Texture2D source, int targetWidth, int targetHeight)
+    {
+        Texture2D result = new Texture2D(targetWidth, targetHeight, source.format, false);
+        float incX = (1.0f / (float)targetWidth);
+        float incY = (1.0f / (float)targetHeight);
+        for (int i = 0; i < result.height; ++i)
+        {
+            for (int j = 0; j < result.width; ++j)
+            {
+                UnityEngine.Color newColor = source.GetPixelBilinear((float)j / (float)result.width, (float)i / (float)result.height);
+                result.SetPixel(j, i, newColor);
+            }
+        }
+        result.Apply();
+        return result;
     }
     // Use this for initialization
     void Start()
     {
-         layersTexture = new Texture2D(2, 2);
+        layersTexture = new Texture2D(2, 2);
         DragCursor.SetActive(false);
         setupModel();
-       // flipMeshNormals(this.gameObject);
+        //flipMeshNormals(this.gameObject);
         updateMesh();
-
-        LoadOutputImageForLayers(@"C:\GIT\acadiaInteractive\app\Assets\Resources\output.png");
     }
 
     bool dragging = false;
+    bool tensorFlowIsRunning = false;
     Vector3 dragPointOrigin;
     Vector3 dragPointCursor;
+
+    public void LoadResultMesh()
+    {
+        LoadOutputImageForLayers(@"C:\pix2pix-tensorflow\models\output.png");
+        tensorFlowIsRunning = false;
+    }
+
 
     void startDragging(RaycastHit hit)
     {
@@ -113,7 +140,7 @@ public class ImmersiveSimulation : MonoBehaviour {
         RaycastHit hit;
         if (ic.Raycast(ray, out hit, 2000.0f))
         {
-           // dragPointCursor = hit.point;
+            // dragPointCursor = hit.point;
             dragPointCursor.y = clampY(hit.point.y);
             DragCursor.transform.position = dragPointCursor;
         }
@@ -125,10 +152,10 @@ public class ImmersiveSimulation : MonoBehaviour {
             for (int i = 0; i < resolutionX; ++i)
             {
                 var dp = n[i, j].p0 - dragPointOrigin;
-                float d = Mathf.Exp(-0.5f*dp.sqrMagnitude)*dy0;
+                float d = Mathf.Exp(-0.5f * dp.sqrMagnitude) * dy0;
 
 
-                n[i, j].p.y = clampY(n[i, j].p0.y+d);
+                n[i, j].p.y = clampY(n[i, j].p0.y + d);
 
                 srfMeshPoints[k++] = n[i, j].p;
             }
@@ -147,55 +174,44 @@ public class ImmersiveSimulation : MonoBehaviour {
 
     // Update is called once per frame
     void Update()
-	{
-        if (dragging)
+    {
+        if (!tensorFlowIsRunning)
         {
-            if (Input.GetMouseButtonUp(0))
+            if (dragging)
             {
-                endDragging();
+                if (Input.GetMouseButtonUp(0))
+                {
+                    endDragging();
+                }
+                else
+                {
+                    drag();
+                }
             }
             else
             {
-                drag();
-            }
-        }
-        else
-        {
-            if (Input.GetMouseButtonDown(0))
-            {
-                MeshCollider mc = GetComponent<MeshCollider>();
-
-                var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-                RaycastHit hit;
-                if (mc.Raycast(ray, out hit, 2000.0f))
+                if (Input.GetMouseButtonDown(0))
                 {
-                    startDragging(hit);
+                    MeshCollider mc = GetComponent<MeshCollider>();
+
+                    var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                    RaycastHit hit;
+                    if (mc.Raycast(ray, out hit, 2000.0f))
+                    {
+                        startDragging(hit);
+                    }
                 }
             }
         }
 
-        //take snapshot
-        if (Input.GetKeyDown("k"))
-        {
-            //turnOffControlPoints();
-
-            //takeImageScreenShot();
-
-            //turnOnControlPoints();
-
-            runTensorflow();
-
-            //loadandSaveNewImage();
-
-        }
 
     }
 
     #region MeshSetup
-    void setupModel()
+    public void setupModel()
     {
         n = new ShellNode[resolutionX, resolutionZ];
-        srfMeshPoints = new Vector3[resolutionX*resolutionZ];
+        srfMeshPoints = new Vector3[resolutionX * resolutionZ];
         srfMeshTriangles = new int[(resolutionX - 1) * (resolutionZ - 1) * 6];
 
         float dx = (x1 - x0) / (resolutionX - 1.0f);
@@ -209,13 +225,13 @@ public class ImmersiveSimulation : MonoBehaviour {
                 float z = z0 + j * dy;
 
                 n[i, j] = new ShellNode();
-				n[i, j].p = new Vector3(x, meshDefautlElevation, z);
+                n[i, j].p = new Vector3(x, meshDefautlElevation, z);
                 n[i, j].p0 = n[i, j].p;
 
                 srfMeshPoints[j * resolutionX + i] = n[i, j].p;
             }
         }
-			
+
         int k = 0;
         for (int j = 0; j < resolutionZ - 1; ++j)
         {
@@ -226,12 +242,12 @@ public class ImmersiveSimulation : MonoBehaviour {
 
 
                     srfMeshTriangles[k++] = n0;
-                    srfMeshTriangles[k++] = n0+1+resolutionX;
-                    srfMeshTriangles[k++] = n0+1;
+                    srfMeshTriangles[k++] = n0 + 1 + resolutionX;
+                    srfMeshTriangles[k++] = n0 + 1;
 
                     srfMeshTriangles[k++] = n0;
-                    srfMeshTriangles[k++] = n0  +resolutionX;
-                    srfMeshTriangles[k++] = n0 + resolutionX+1;
+                    srfMeshTriangles[k++] = n0 + resolutionX;
+                    srfMeshTriangles[k++] = n0 + resolutionX + 1;
                 }
             }
         }
@@ -242,7 +258,7 @@ public class ImmersiveSimulation : MonoBehaviour {
         srfMesh.vertices = srfMeshPoints;
         srfMesh.triangles = srfMeshTriangles;
         MeshFilter mf = GetComponent<MeshFilter>();
-      //  mf.mesh = vizmesh;
+        //  mf.mesh = vizmesh;
         mf.sharedMesh = srfMesh;
 
         MeshCollider mc = GetComponent<MeshCollider>();
@@ -259,10 +275,10 @@ public class ImmersiveSimulation : MonoBehaviour {
 
                 GameObject go = GameObject.Find("Control" + count);
 
-				//
-				n [i, j].p = new Vector3(go.transform.position.x,go.transform.position.z,go.transform.position.y);
+                //
+                n[i, j].p = new Vector3(go.transform.position.x, go.transform.position.z, go.transform.position.y);
 
-				srfMeshPoints[count] = new Vector3((float)n[i,j].p.x, (float)n[i, j].p.z, (float)n[i, j].p.y);
+                srfMeshPoints[count] = new Vector3((float)n[i, j].p.x, (float)n[i, j].p.z, (float)n[i, j].p.y);
                 count++;
             }
         }
@@ -282,79 +298,77 @@ public class ImmersiveSimulation : MonoBehaviour {
     #region images
     private static string constructPath(string name)
     {
-        return string.Format("{0}/tensorflow/{1}",
-                             Application.dataPath,name);
+        return string.Format("C:\\pix2pix-tensorflow\\models\\{0}", name);
     }
 
     bool takeHiResShot = true;
 
-    [SerializeField]
-    private Camera captureCamera;
-    void takeImageScreenShot()
+    //[SerializeField]
+    //private Camera captureCamera;
+    public void TakeImageScreenShot()
     {
+        tensorFlowIsRunning = true;
         if (takeHiResShot)
         {
             takeHiResShot = false;
             int resWidth = 256;
             int resHeight = 256;
 
-            RenderTexture rt = new RenderTexture(resWidth, resHeight, 24);
-            captureCamera.GetComponent<Camera>().targetTexture = rt;
+            /* RenderTexture rt = new RenderTexture(resWidth, resHeight, 24);
+             captureCamera.GetComponent<Camera>().targetTexture = rt;
+
+             Texture2D screenShot = new Texture2D(resWidth, resHeight, TextureFormat.RGB24, false);
+             captureCamera.GetComponent<Camera>().Render();
+             RenderTexture.active = rt;
+             screenShot.ReadPixels(new Rect(0, 0, resWidth, resHeight), 0, 0);
+             captureCamera.GetComponent<Camera>().targetTexture = null;
+             RenderTexture.active = null; // added to avoid errors
+             Destroy(rt);
+             */
+
             Texture2D screenShot = new Texture2D(resWidth, resHeight, TextureFormat.RGB24, false);
-            captureCamera.GetComponent<Camera>().Render();
-            RenderTexture.active = rt;
+            RenderTexture.active = topViewTexture;
             screenShot.ReadPixels(new Rect(0, 0, resWidth, resHeight), 0, 0);
-            captureCamera.GetComponent<Camera>().targetTexture = null;
             RenderTexture.active = null; // added to avoid errors
-            Destroy(rt);
-            byte[] bytes = screenShot.EncodeToPNG();
-            string filename = constructPath("inputBefore.png");
-            System.IO.File.WriteAllBytes(filename, bytes);
-            Debug.Log(string.Format("Took screenshot to: {0}", filename));
+
+
+
+            //byte[] bytes = screenShot.EncodeToPNG();
+            //string filename = constructPath("inputBefore.png");
+
+            //if (File.Exists(filename)) File.Delete(filename);
+
+
+            //File.Create(filename).Dispose();
+            //File.WriteAllBytes(filename, bytes);
+
+
+            //Debug.Log(string.Format("Took screenshot to: {0}", filename));
             takeHiResShot = true;
-            Bitmap outputBitmap = new Bitmap(constructPath("inputBefore.png"));
+
+            //Bitmap outputBitmap = new Bitmap(filename);
+
             int rx = 256;
             int ry = 256;
             Bitmap bmp = new Bitmap(rx, ry);
-            Renderer rend = this.GetComponent<Renderer>();
-            Texture2D cutoutTexture;
+            //Renderer rend = this.GetComponent<Renderer>();
+            //Texture2D cutoutTexture;
 
             for (int i = 0; i < rx; i++)
             {
                 for (int j = 0; j < ry; j++)
                 {
-                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(127, 127, outputBitmap.GetPixel(i, j).R));
+                    //bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(127, 127, outputBitmap.GetPixel(i, j).R));
+                    bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(127, 127, (int) map(screenShot.GetPixel(i, j).r, 0.0f ,1.0f ,0f ,255f)));
                 }
             }
             bmp.Save(constructPath("input.png"), System.Drawing.Imaging.ImageFormat.Png);
+
         }
 
     }
-    void runTensorflow()
-    {
-        //TODO: serialize that outside
-        string pythonPath = "C:\\Users\\t_abdea\\AppData\\Local\\Programs\\Python\\Python36\\python.exe";
 
-        ////////////run the python tesnorflow///////////////
-        string dockerPath = constructPath("tools/dockrun.py");
-        dockerPath = dockerPath.Replace('/', '\\');
-        string localServerPath = constructPath("server/tools/process-local.py");
-        localServerPath = localServerPath.Replace('/', '\\');
-        string arguments = "--model_dir \""+ constructPath("model") + "\" --input_file \"" + constructPath("trial.png") + "\"  --output_file \"" + constructPath("output.png")+"\"";
-        arguments = arguments.Replace('/', '\\');
-
-        //if (Run)
-        {
-            Debug.Log(run_cmd(dockerPath, "", pythonPath));
-            Debug.Log(run_cmd(localServerPath, arguments, pythonPath));
-        }
-
-        ///////////get image from the other folder/////////////
-        //System.Drawing.Image output = System.Drawing.Image.FromFile("Z:\\pix2pix-tensorflow\\c_test\\images\\" + name + "-outputs.png");
-       // Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
-    }
-
-    void loadandSaveNewImage()
+    void LoadandSaveNewImage()
     {
         Bitmap outputBitmap = new Bitmap(constructPath("output.png"));
 
@@ -373,7 +387,7 @@ public class ImmersiveSimulation : MonoBehaviour {
                 else
                 {
                     //save value displacement bitmap
-                    bmp.SetPixel(i + rx, j, outputBitmap.GetPixel(i,j));
+                    bmp.SetPixel(i + rx, j, outputBitmap.GetPixel(i, j));
                     bmp.SetPixel(i, j, System.Drawing.Color.FromArgb(255, 255, 255));
                     count++;
                 }
@@ -381,7 +395,7 @@ public class ImmersiveSimulation : MonoBehaviour {
         }
         bmp.Save(constructPath("trialNew.jpg"), System.Drawing.Imaging.ImageFormat.Jpeg);
     }
-   
+
     #endregion
 
     #region Utilities
@@ -411,32 +425,9 @@ public class ImmersiveSimulation : MonoBehaviour {
         }
         prefabs.Clear();
     }
-	float map(float s, float a1, float a2, float b1, float b2)
-	{
-		return b1 + (s - a1) * (b2 - b1) / (a2 - a1);
-	}
-
-    string run_cmd(string cmd, string args, string pythonPath)
+    float map(float s, float a1, float a2, float b1, float b2)
     {
-        System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo();
-        start.FileName = pythonPath;
-        start.Arguments = string.Format("\"{0}\" {1}", cmd, args);
-
-        Debug.Log(start.Arguments);
-
-        start.UseShellExecute = false;// Do not use OS shell
-        start.CreateNoWindow = true; // We don't need new window
-        start.RedirectStandardOutput = true;// Any output, generated by application will be redirected back
-        start.RedirectStandardError = true; // Any error in standard output will be redirected back (for example exceptions)
-        using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
-        {
-            using (StreamReader reader = process.StandardOutput)
-            {
-                string stderr = process.StandardError.ReadToEnd(); // Here are the exceptions from our Python script
-                string result = reader.ReadToEnd(); // Here is the result of StdOut(for example: print "test")
-                return result;
-            }
-        }
+        return b1 + (s - a1) * (b2 - b1) / (a2 - a1);
     }
 
     #endregion

@@ -89,7 +89,7 @@ public class OutputMeshGeneration : MonoBehaviour
             }
             bmp.Save(constructPath("outputUp.png"), System.Drawing.Imaging.ImageFormat.Png);
             cutoutTexture = LoadTexture(constructPath("outputUp.png"), rx, ry);
-            cutoutTexture.alphaIsTransparency = true;
+            //cutoutTexture.alphaIsTransparency = true;
             rend.material.mainTexture = cutoutTexture;
             Debug.Log("loaded Texture up");
         }
@@ -106,7 +106,7 @@ public class OutputMeshGeneration : MonoBehaviour
             bmp.Save(constructPath( "outputDown.png"), System.Drawing.Imaging.ImageFormat.Png);
 
             cutoutTexture = LoadTexture(constructPath( "outputDown.png"), rx, ry);
-            cutoutTexture.alphaIsTransparency = true;
+            //cutoutTexture.alphaIsTransparency = true;
             rend.material.mainTexture = cutoutTexture;
             Debug.Log("loaded Texture down");
         }
